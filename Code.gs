@@ -1,0 +1,44 @@
+/**
+ * SIM SATRIA CLASS BUILDER
+ * Core controller.
+ */
+const APP = Object.freeze({
+  name: 'SIM SATRIA',
+  version: '1.0.0',
+  defaultMenu: '7kaih'
+});
+
+function doGet() {
+  return HtmlService.createTemplateFromFile('Index')
+    .evaluate()
+    .setTitle(APP.name)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+function bootstrapSystem() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    ensureMasterSpreadsheet_();
+    ensureAllMasterSheets_();
+    seedOwner_();
+    seedDefaultMenu_();
+    seedSystemConfig_();
+    return { ok: true, message: 'Sistem MASTER berhasil dibuat/diperiksa.' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getAppState() {
+  return {
+    app: APP,
+    authenticated: !!getSession_(),
+    session: getPublicSession_(),
+    menus: getVisibleMenus_()
+  };
+}
