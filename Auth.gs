@@ -1,4 +1,4 @@
-/** Passwords are application passwords, stored only as SHA-256 hashes. */
+/** Authentication and role authorization. */
 function hashPassword_(password) {
   const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(password), Utilities.Charset.UTF_8);
   return bytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
@@ -18,6 +18,7 @@ function login(username, password) {
 
 function logout(token) {
   if (token) CacheService.getScriptCache().remove('SESSION_' + token);
+  clearActiveToken_();
   return { ok: true };
 }
 
@@ -47,14 +48,30 @@ function requireRole_(roles) {
 }
 function requireOwner_() { return requireRole_(ROLE.OWNER); }
 
+/** Initial OWNER: username yazid, password 12345. */
 function seedOwner_() {
   const sheet = getMasterSpreadsheet_().getSheetByName(MASTER_SHEETS.USERS);
-  const ownerEmail = PropertiesService.getScriptProperties().getProperty('MASTER_OWNER_EMAIL') || Session.getEffectiveUser().getEmail();
   const users = readObjects_(MASTER_SHEETS.USERS);
-  if (users.some(u => u.role === ROLE.OWNER)) return;
+  if (users.some(u => String(u.role || '').toUpperCase() === ROLE.OWNER)) return;
   const owner = {
-    id: Utilities.getUuid(), username: ownerEmail.toLowerCase(), password_hash: hashPassword_('CHANGE_ME_NOW'),
-    nama: ownerEmail, role: ROLE.OWNER, status: 'AKTIF', created_at: new Date(), updated_at: new Date()
+    id: Utilities.getUuid(),
+    username: 'yazid',
+    password_hash: hashPassword_('12345'),
+    nama: 'Yazid',
+    role: ROLE.OWNER,
+    status: 'AKTIF',
+    created_at: new Date(),
+    updated_at: new Date()
   };
   appendObject_(sheet, owner);
+}
+
+function changeOwnPassword(oldPassword, newPassword) {
+  const user = requireAuth_();
+  if (!newPassword || String(newPassword).length < 5) throw new Error('PASSWORD_TOO_SHORT');
+  const rows = readObjects_(MASTER_SHEETS.USERS);
+  const current = rows.find(r => String(r.id) === String(user.id));
+  if (!current || current.password_hash !== hashPassword_(oldPassword)) throw new Error('OLD_PASSWORD_INVALID');
+  updateById_(MASTER_SHEETS.USERS, user.id, { password_hash: hashPassword_(newPassword), updated_at: new Date() });
+  return { ok: true, message: 'Password berhasil diganti.' };
 }
