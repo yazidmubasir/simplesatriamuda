@@ -34,6 +34,14 @@ function bootstrapSystem() {
   }
 }
 
+/**
+ * Compatibility wrapper used by bootstrapSystem().
+ * The actual implementation lives in Config.gs.
+ */
+function ensureMasterSpreadsheet_() {
+  return getOrCreateMasterSpreadsheet_();
+}
+
 function getAppState() {
   return {
     app: APP,
