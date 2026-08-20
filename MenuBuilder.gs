@@ -17,8 +17,17 @@ function getVisibleMenusForUser_(user) {
   const rows = readObjects_(MASTER_SHEETS.MENU);
   return rows.filter(m => String(m.active).toUpperCase() === 'TRUE' || m.active === true || String(m.active)==='1')
     .filter(m => String(m.roles||'').split(',').map(s=>s.trim()).includes(user.role))
-    .sort((a,b)=>Number(a.urutan||0)-Number(b.urutan||0));
+    .sort((a,b)=>Number(a.urutan||0)-Number(b.urutan||0))
+    .map(publicMenu_);
 }
-function getMenuBuilder() { requireOwner_(); return readObjects_(MASTER_SHEETS.MENU); }
-function saveMenu(data) { const u=requireOwner_(); if(!data.key||!data.label||!data.handler) throw new Error('KEY_LABEL_HANDLER_REQUIRED'); data.roles=Array.isArray(data.roles)?data.roles.join(','):String(data.roles||ROLE.OWNER); return saveMasterRow('MENU',data); }
+function publicMenu_(m) {
+  return {
+    id: String(m.id || ''), key: String(m.key || ''), label: String(m.label || ''),
+    icon: String(m.icon || ''), handler: String(m.handler || ''), urutan: Number(m.urutan || 0),
+    roles: String(m.roles || ''), active: m.active === true || String(m.active).toUpperCase() === 'TRUE' || String(m.active) === '1',
+    config_json: String(m.config_json || '')
+  };
+}
+function getMenuBuilder() { requireOwner_(); return readObjects_(MASTER_SHEETS.MENU).map(publicMenu_); }
+function saveMenu(data) { requireOwner_(); if(!data.key||!data.label||!data.handler) throw new Error('KEY_LABEL_HANDLER_REQUIRED'); data.roles=Array.isArray(data.roles)?data.roles.join(','):String(data.roles||ROLE.OWNER); return saveMasterRow('MENU',data); }
 function deleteMenu(id) { return deleteMasterRow('MENU',id); }
