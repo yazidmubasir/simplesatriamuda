@@ -12,12 +12,14 @@ function serializableValue_(value) {
 }
 function sanitizeClientRow_(sheetName, data) {
   const row = {};
-  Object.keys(data || {}).forEach(k => { if (sheetName === MASTER_SHEETS.USERS && k === 'password_hash') return; row[k] = serializableValue_(data[k]); });
+  Object.keys(data || {}).forEach(k => {
+    if (sheetName === MASTER_SHEETS.USERS && k === 'password_hash') return;
+    row[k] = serializableValue_(data[k]);
+  });
   return row;
 }
-function sanitizeAuditPayload_(sheetName, data) {
-  return sanitizeClientRow_(sheetName, data);
-}
+function sanitizeAuditPayload_(sheetName, data) { return sanitizeClientRow_(sheetName, data); }
+
 function getMasterRows(entity) {
   const user = requireAuth_();
   const sheetName = masterEntitySheet_(entity);
@@ -26,6 +28,75 @@ function getMasterRows(entity) {
   if (user.role === ROLE.ADMIN_KELAS) rows = rows.filter(r => String(r.kelas_id) === String(user.kelas_id));
   return rows;
 }
+
+function getUserRelationOptions() {
+  const user = requireOwner_();
+  return {
+    guru: readObjects_(MASTER_SHEETS.GURU).filter(r => String(r.status || 'AKTIF').toUpperCase() !== 'NONAKTIF').map(sanitizeClientRow_.bind(null, MASTER_SHEETS.GURU)),
+    karyawan: readObjects_(MASTER_SHEETS.KARYAWAN).filter(r => String(r.status || 'AKTIF').toUpperCase() !== 'NONAKTIF').map(sanitizeClientRow_.bind(null, MASTER_SHEETS.KARYAWAN)),
+    siswa: readObjects_(MASTER_SHEETS.SISWA).filter(r => String(r.status || 'AKTIF').toUpperCase() !== 'NONAKTIF').map(sanitizeClientRow_.bind(null, MASTER_SHEETS.SISWA)),
+    kelas: readObjects_(MASTER_SHEETS.KELAS).filter(r => String(r.status || 'AKTIF').toUpperCase() !== 'NONAKTIF').map(sanitizeClientRow_.bind(null, MASTER_SHEETS.KELAS))
+  };
+}
+
+function findMasterById_(sheetName, id) {
+  if (!id) return null;
+  return readObjects_(sheetName).find(r => String(r.id) === String(id)) || null;
+}
+
+function validateUserRelation_(data, existingId) {
+  const role = String(data.role || '').toUpperCase();
+  const allUsers = readObjects_(MASTER_SHEETS.USERS);
+  const linked = allUsers.filter(u => String(u.id) !== String(existingId || '') && String(u.status || 'AKTIF').toUpperCase() !== 'NONAKTIF');
+
+  if (role === ROLE.OWNER) {
+    data.guru_id = ''; data.karyawan_id = ''; data.siswa_id = ''; data.kelas_id = '';
+    return data;
+  }
+
+  if (role === ROLE.GURU) {
+    if (!data.guru_id) throw new Error('GURU_REQUIRED');
+    const guru = findMasterById_(MASTER_SHEETS.GURU, data.guru_id);
+    if (!guru) throw new Error('GURU_NOT_FOUND');
+    if (linked.some(u => String(u.guru_id) === String(data.guru_id))) throw new Error('GURU_ALREADY_HAS_USER');
+    data.nama = String(guru.nama || '').trim();
+    data.karyawan_id = ''; data.siswa_id = ''; data.kelas_id = '';
+    return data;
+  }
+
+  if (role === ROLE.KARYAWAN) {
+    if (!data.karyawan_id) throw new Error('KARYAWAN_REQUIRED');
+    const k = findMasterById_(MASTER_SHEETS.KARYAWAN, data.karyawan_id);
+    if (!k) throw new Error('KARYAWAN_NOT_FOUND');
+    if (linked.some(u => String(u.karyawan_id) === String(data.karyawan_id))) throw new Error('KARYAWAN_ALREADY_HAS_USER');
+    data.nama = String(k.nama || '').trim();
+    data.guru_id = ''; data.siswa_id = ''; data.kelas_id = '';
+    return data;
+  }
+
+  if (role === ROLE.SISWA) {
+    if (!data.siswa_id) throw new Error('SISWA_REQUIRED');
+    const s = findMasterById_(MASTER_SHEETS.SISWA, data.siswa_id);
+    if (!s) throw new Error('SISWA_NOT_FOUND');
+    if (linked.some(u => String(u.siswa_id) === String(data.siswa_id))) throw new Error('SISWA_ALREADY_HAS_USER');
+    data.nama = String(s.nama || '').trim();
+    data.kelas_id = String(s.kelas_id || '');
+    data.guru_id = ''; data.karyawan_id = '';
+    return data;
+  }
+
+  if (role === ROLE.ADMIN_KELAS) {
+    if (!data.kelas_id) throw new Error('KELAS_REQUIRED');
+    const kelas = findMasterById_(MASTER_SHEETS.KELAS, data.kelas_id);
+    if (!kelas) throw new Error('KELAS_NOT_FOUND');
+    if (linked.some(u => String(u.kelas_id) === String(data.kelas_id) && String(u.role).toUpperCase() === ROLE.ADMIN_KELAS)) throw new Error('KELAS_ALREADY_HAS_ADMIN');
+    data.nama = String(data.nama || '').trim();
+    data.guru_id = ''; data.karyawan_id = ''; data.siswa_id = '';
+    return data;
+  }
+  throw new Error('INVALID_ROLE');
+}
+
 function saveMasterRow(entity, data) {
   const user = requireAuth_();
   const sheetName = masterEntitySheet_(entity);
@@ -44,13 +115,13 @@ function saveMasterRow(entity, data) {
 
   if (sheetName === MASTER_SHEETS.USERS) {
     data.username = String(data.username || '').trim().toLowerCase();
-    data.nama = String(data.nama || '').trim();
     data.role = String(data.role || '').trim().toUpperCase();
     data.status = String(data.status || 'AKTIF').trim().toUpperCase();
-    if (!data.username || !data.nama || !data.role) throw new Error('USERNAME_NAMA_ROLE_REQUIRED');
+    if (!data.username || !data.role) throw new Error('USERNAME_ROLE_REQUIRED');
     if (!Object.keys(ROLE).map(k => ROLE[k]).includes(data.role)) throw new Error('INVALID_ROLE');
     const duplicate = readObjects_(sheetName).find(r => String(r.username || '').trim().toLowerCase() === data.username && String(r.id) !== String(data.id || ''));
     if (duplicate) throw new Error('USERNAME_ALREADY_EXISTS');
+    data = validateUserRelation_(data, data.id);
     delete data.password_hash;
   }
 
@@ -89,6 +160,7 @@ function saveMasterRow(entity, data) {
   audit_(user, 'SAVE', sheetName, data.id, sanitizeAuditPayload_(sheetName, data));
   return { ok: true, row: sanitizeClientRow_(sheetName, data) };
 }
+
 function deleteMasterRow(entity, id) {
   const user = requireOwner_();
   const sheetName = masterEntitySheet_(entity);
@@ -102,9 +174,7 @@ function readObjects_(sheetName) {
   if (!sh || sh.getLastRow() < 2 || sh.getLastColumn() < 1) return [];
   const values = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
   const headers = (values[0] || []).map(parseColumnId_);
-  return values.slice(1).filter(row => row.some(v => v !== '' && v != null)).map(row => {
-    const o = {}; headers.forEach((h,i) => { if (h) o[h] = row[i]; }); return o;
-  });
+  return values.slice(1).filter(row => row.some(v => v !== '' && v != null)).map(row => { const o = {}; headers.forEach((h,i) => { if (h) o[h] = row[i]; }); return o; });
 }
 function appendObject_(sheet, obj) {
   if (!sheet) throw new Error('SHEET_NOT_FOUND');
@@ -134,17 +204,6 @@ function deleteById_(sheetName, id) {
   if(idx<0) throw new Error('ROW_NOT_FOUND');
   sh.deleteRow(idx+1);
 }
-function makeClassSheetName_(kode, nama) {
-  const base = String(kode || nama || 'KELAS').trim().toUpperCase();
-  const clean = base.replace(/[^A-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').substring(0, 70);
-  return normalizeSheetName_('KELAS_' + (clean || Utilities.getUuid().slice(0,8)));
-}
-function normalizeSheetName_(name) {
-  let s = String(name || '').trim().replace(/[\\/?*\[\]:]/g, '_');
-  s = s.substring(0, 90).trim();
-  if (!s) throw new Error('INVALID_SHEET_NAME');
-  return s;
-}
-function audit_(user, action, target, targetId, payload) {
-  try { appendObject_(getMasterSpreadsheet_().getSheetByName(MASTER_SHEETS.AUDIT), {id:Utilities.getUuid(), actor_user_id:user.id, action, target, target_id:targetId, payload_json:JSON.stringify(payload||{}), created_at:new Date()}); } catch(e) {}
-}
+function makeClassSheetName_(kode, nama) { const base = String(kode || nama || 'KELAS').trim().toUpperCase(); const clean = base.replace(/[^A-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').substring(0, 70); return normalizeSheetName_('KELAS_' + (clean || Utilities.getUuid().slice(0,8))); }
+function normalizeSheetName_(name) { let s = String(name || '').trim().replace(/[\\/?*\[\]:]/g, '_'); s = s.substring(0, 90).trim(); if (!s) throw new Error('INVALID_SHEET_NAME'); return s; }
+function audit_(user, action, target, targetId, payload) { try { appendObject_(getMasterSpreadsheet_().getSheetByName(MASTER_SHEETS.AUDIT), {id:Utilities.getUuid(), actor_user_id:user.id, action, target, target_id:targetId, payload_json:JSON.stringify(payload||{}), created_at:new Date()}); } catch(e) {} }
