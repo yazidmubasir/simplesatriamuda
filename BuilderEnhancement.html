@@ -30,7 +30,7 @@
     const name=String(input?.value||'').trim();err.textContent='';
     if(!name){err.textContent='Nama sheet wajib diisi.';input?.focus();return;}
     if(name.length>90){err.textContent='Nama sheet maksimal 90 karakter.';return;}
-    if(/[\\/?*\[\]:]/.test(name)){err.textContent='Nama sheet mengandung karakter yang tidak diperbolehkan.';return;}
+    if(/[\\/?*\[\]:]/.test(name)){err.textContent='Nama sheet mengandung karakter yang tidak diperbolekan.';return;}
     btn.disabled=true;btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Membuat...';
     try{
       const r=await gas('createActivitySheet',state.builder.kelasId,name);
@@ -45,6 +45,48 @@
   masterMeta.KELAS.cols=['kelas','spreadsheet_id','status'];
 
   /* MASTER_USERS owns ADMIN_KELAS usernames. No admin_user_id is stored in MASTER_KELAS. */
+
+  /* ADMIN_KELAS -> Pilih Kelas must always come from MASTER_KELAS.kelas. */
+  async function syncAdminKelasDropdown_(){
+    const role=String(document.getElementById('userRole')?.value||'').toUpperCase();
+    const box=document.getElementById('userRelationFields');
+    if(!box)return;
+    if(role!=='ADMIN_KELAS')return;
+
+    const current=String(document.querySelector('#dataModalBody [data-f="kelas_id"]')?.value||'').trim();
+    box.innerHTML='<div class="user-relation-note"><span class="spinner-border spinner-border-sm me-2"></span>Memuat daftar kelas dari MASTER_KELAS...</div>';
+    try{
+      const rows=await gas('getMasterRows','KELAS');
+      const classes=(Array.isArray(rows)?rows:[]).filter(r=>String(r?.status||'AKTIF').toUpperCase()!=='NONAKTIF'&&String(r?.kelas||'').trim());
+      box.innerHTML='<label class="form-label fw-semibold">Pilih Kelas</label>'+
+        '<select class="form-select" data-f="kelas_id" id="adminKelasSelect">'+
+        '<option value="">-- Pilih --</option>'+classes.map(r=>'<option value="'+esc(r.id)+'">'+esc(r.kelas)+'</option>').join('')+
+        '</select>'+
+        '<small class="text-muted">Daftar kelas diambil dari kolom <code>kelas</code> pada <code>MASTER_KELAS</code>.</small>';
+      const select=document.getElementById('adminKelasSelect');
+      if(select&&current)select.value=current;
+      if(select)select.disabled=classes.length===0;
+      if(!classes.length)box.innerHTML='<div class="alert alert-warning mb-0">Belum ada kelas aktif di MASTER_KELAS.</div>';
+    }catch(e){box.innerHTML='<div class="alert alert-danger mb-0">Gagal memuat kelas: '+esc(errorText(e))+'</div>';}
+  }
+
+  const _openUserModalForClass=window.openUserModal;
+  if(typeof _openUserModalForClass==='function'){
+    window.openUserModal=async function(){
+      const result=await _openUserModalForClass.apply(this,arguments);
+      setTimeout(()=>syncAdminKelasDropdown_(),0);
+      return result;
+    };
+  }
+
+  const _refreshUserRoleFieldsForClass=window.refreshUserRoleFields;
+  if(typeof _refreshUserRoleFieldsForClass==='function'){
+    window.refreshUserRoleFields=async function(){
+      const result=await _refreshUserRoleFieldsForClass.apply(this,arguments);
+      setTimeout(()=>syncAdminKelasDropdown_(),0);
+      return result;
+    };
+  }
 
   const _saveMaster=window.saveMaster;
   window.saveMaster=async function(){
