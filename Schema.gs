@@ -6,6 +6,7 @@
 function ensureAllMasterSheets_() {
   const ss = getMasterSpreadsheet_();
   Object.keys(MASTER_SCHEMA).forEach(key => ensureSheetSchema_(ss, key, MASTER_SCHEMA[key]));
+  migrateMasterKelasSchema_();
 }
 
 function ensureSheetSchema_(ss, sheetName, schema) {
@@ -46,22 +47,19 @@ function getSchemaBySheetName_(sheetName) {
   return key ? MASTER_SCHEMA[key] : null;
 }
 
-function createOrEnsureClassSheet_(kelas) {
-  const ss = getMasterSpreadsheet_();
-  const sheetName = sanitizeSheetName_(kelas.sheet_name || ('KELAS_' + kelas.kode));
-  let sh = ss.getSheetByName(sheetName);
-  if (!sh) sh = ss.insertSheet(sheetName);
-  const baseSchema = [
-    ['id','ID','TEXT'], ['kelas_id','Kelas ID','TEXT'], ['siswa_id','Siswa ID','TEXT'],
-    ['tanggal','Tanggal','DATE'], ['mapel_id','Mapel ID','TEXT'], ['guru_id','Guru ID','TEXT'],
-    ['created_by','Dibuat Oleh','TEXT'], ['created_at','Dibuat','DATETIME'], ['updated_at','Diubah','DATETIME']
-  ];
-  ensureColumns_(sh, baseSchema);
-  return sh.getName();
+/** Remove obsolete Kelas metadata columns left by older versions. */
+function migrateMasterKelasSchema_() {
+  const sh=getMasterSpreadsheet_().getSheetByName(MASTER_SHEETS.KELAS);
+  if(!sh||sh.getLastColumn()<1)return;
+  const obsolete=new Set(['kode','nama','sheet_name']);
+  const headers=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0].map(parseColumnId_);
+  for(let i=headers.length-1;i>=0;i--){
+    if(obsolete.has(headers[i]))sh.deleteColumn(i+1);
+  }
+  ensureColumns_(sh,MASTER_SCHEMA[MASTER_SHEETS.KELAS]);
 }
 
-function sanitizeSheetName_(name) {
-  let s = String(name || 'KELAS').replace(/[\\/?*\[\]:]/g, '-').trim();
-  if (!s) s = 'KELAS';
-  return s.substring(0, 100);
+/** Deprecated: class activity sheets are no longer stored in MASTER. */
+function createOrEnsureClassSheet_(kelas) {
+  throw new Error('CLASS_ACTIVITY_SHEETS_MUST_BE_MANAGED_IN_CLASS_SPREADSHEET');
 }
