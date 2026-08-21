@@ -44,6 +44,14 @@
   /* MASTER KELAS: Kelas is a real master field, followed by Spreadsheet ID. */
   masterMeta.KELAS.cols=['kelas','spreadsheet_id','admin_user_id','status'];
 
+  /* Keep relation dropdowns compatible with the new MASTER_KELAS field. */
+  window.relationLabel=function(r,type){
+    if(type==='guru')return(r.nip?r.nip+' — ':'')+(r.nama||'');
+    if(type==='karyawan')return(r.nik?r.nik+' — ':'')+(r.nama||'');
+    if(type==='siswa')return(r.nisn?r.nisn+' — ':'')+(r.nama||'')+(r.kelas_id?' ('+r.kelas_id+')':'');
+    return(r.kelas||r.nama||'');
+  };
+
   function openKelasConfigModal(index){
     const isNew=index<0;
     const r=isNew?{}:(state.rows[index]||{});
