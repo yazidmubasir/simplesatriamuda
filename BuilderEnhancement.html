@@ -41,15 +41,47 @@
     }catch(e){err.textContent=errorText(e)}finally{btn.disabled=false;btn.innerHTML='Buat Sheet';}
   };
 
-  /* MASTER KELAS: only spreadsheet, admin and status. Sheet names belong to the class spreadsheet. */
-  masterMeta.KELAS.cols=['spreadsheet_id','admin_user_id','status'];
+  /* MASTER KELAS: Kelas is a real master field, followed by Spreadsheet ID. */
+  masterMeta.KELAS.cols=['kelas','spreadsheet_id','admin_user_id','status'];
+
+  function openKelasConfigModal(index){
+    const isNew=index<0;
+    const r=isNew?{}:(state.rows[index]||{});
+    state.editingIndex=index;
+    const modal=document.getElementById('dataModal');
+    const title=document.getElementById('dataModalTitle');
+    const body=document.getElementById('dataModalBody');
+    if(!modal||!body)return;
+    title.textContent=isNew?'Tambah Kelas':'Edit Kelas';
+    body.innerHTML='<input type="hidden" data-f="id" value="'+esc(r.id||'')+'">'+
+      '<div class="row g-3">'+
+      '<div class="col-12"><label class="form-label fw-semibold">Kelas <span class="required-star">*</span></label><input class="form-control" data-f="kelas" maxlength="100" value="'+esc(r.kelas||'')+'" placeholder="Contoh: X IPA 1"></div>'+
+      '<div class="col-12"><label class="form-label fw-semibold">Spreadsheet ID <span class="required-star">*</span></label><input class="form-control" data-f="spreadsheet_id" value="'+esc(r.spreadsheet_id||'')+'" placeholder="ID Spreadsheet Kelas"></div>'+
+      '<div class="col-md-6"><label class="form-label fw-semibold">Admin User ID</label><input class="form-control" data-f="admin_user_id" value="'+esc(r.admin_user_id||'')+'" placeholder="ID user ADMIN_KELAS"></div>'+
+      '<div class="col-md-6"><label class="form-label fw-semibold">Status</label><select class="form-select" data-f="status"><option value="AKTIF" '+(String(r.status||'AKTIF').toUpperCase()==='AKTIF'?'selected':'')+'>AKTIF</option><option value="NONAKTIF" '+(String(r.status||'').toUpperCase()==='NONAKTIF'?'selected':'')+'>NONAKTIF</option></select></div>'+
+      '</div>';
+    bootstrap.Modal.getOrCreateInstance(modal).show();
+  }
+
+  const _newMasterRow=window.newMasterRow;
+  window.newMasterRow=function(){
+    if(state.entity==='KELAS')return openKelasConfigModal(-1);
+    return _newMasterRow();
+  };
+
+  const _editMaster=window.editMaster;
+  window.editMaster=function(i){
+    if(state.entity==='KELAS')return openKelasConfigModal(i);
+    return _editMaster(i);
+  };
 
   const _saveMaster=window.saveMaster;
   window.saveMaster=async function(){
     if(state.entity!=='KELAS')return _saveMaster();
     const modal=document.getElementById('dataModal'),btn=document.getElementById('dataSaveBtn'),d={};
     modal.querySelectorAll('[data-f]').forEach(x=>{d[x.dataset.f]=x.value});
-    if(!String(d.spreadsheet_id||'').trim())return alert('ID Spreadsheet Kelas wajib diisi.');
+    if(!String(d.kelas||'').trim())return alert('Kelas wajib diisi.');
+    if(!String(d.spreadsheet_id||'').trim())return alert('Spreadsheet ID wajib diisi.');
     btn.disabled=true;
     try{
       const r=await gas('saveKelasConfig',d);
