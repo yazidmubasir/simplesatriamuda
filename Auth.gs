@@ -5,8 +5,16 @@ function hashPassword_(password) {
 }
 
 function sessionCache_() {
-  // UserCache is scoped to the current web-app user.
   return CacheService.getUserCache();
+}
+
+function saveSession_(token, user) {
+  const payload = JSON.stringify(user);
+  sessionCache_().put('SESSION_' + token, payload, 21600);
+  // Script cache is a fallback for deployments where UserCache is not retained
+  // between web-app executions.
+  CacheService.getScriptCache().put('SESSION_' + token, payload, 21600);
+  PropertiesService.getScriptProperties().setProperty('ACTIVE_TOKEN', token);
 }
 
 function login(username, password) {
@@ -24,13 +32,9 @@ function login(username, password) {
   }
 
   const token = Utilities.getUuid();
-  const payload = JSON.stringify(user);
-
-  // Establish the active session during login itself.
-  sessionCache_().put('SESSION_' + token, payload, 21600);
+  saveSession_(token, user);
   sessionCache_().put('ACTIVE_TOKEN', token, 21600);
 
-  // Compatibility fallback for existing deployments.
   try {
     PropertiesService.getUserProperties().setProperty('ACTIVE_TOKEN', token);
   } catch (e) {}
@@ -47,9 +51,13 @@ function login(username, password) {
 
 function logout(token) {
   const active = String(token || getActiveToken_() || '').trim();
-  if (active) sessionCache_().remove('SESSION_' + active);
+  if (active) {
+    sessionCache_().remove('SESSION_' + active);
+    CacheService.getScriptCache().remove('SESSION_' + active);
+  }
   sessionCache_().remove('ACTIVE_TOKEN');
   try { PropertiesService.getUserProperties().deleteProperty('ACTIVE_TOKEN'); } catch (e) {}
+  try { PropertiesService.getScriptProperties().deleteProperty('ACTIVE_TOKEN'); } catch (e) {}
   return { ok: true };
 }
 
@@ -57,7 +65,11 @@ function getActiveToken_() {
   let token = '';
   try { token = String(sessionCache_().get('ACTIVE_TOKEN') || '').trim(); } catch (e) {}
   if (token) return token;
+
   try { token = String(PropertiesService.getUserProperties().getProperty('ACTIVE_TOKEN') || '').trim(); } catch (e) {}
+  if (token) return token;
+
+  try { token = String(PropertiesService.getScriptProperties().getProperty('ACTIVE_TOKEN') || '').trim(); } catch (e) {}
   return token;
 }
 
@@ -87,12 +99,14 @@ function setActiveToken(token) {
 
   sessionCache_().put('ACTIVE_TOKEN', token, 21600);
   try { PropertiesService.getUserProperties().setProperty('ACTIVE_TOKEN', token); } catch (e) {}
+  try { PropertiesService.getScriptProperties().setProperty('ACTIVE_TOKEN', token); } catch (e) {}
   return publicUser_(user);
 }
 
 function clearActiveToken_() {
   sessionCache_().remove('ACTIVE_TOKEN');
   try { PropertiesService.getUserProperties().deleteProperty('ACTIVE_TOKEN'); } catch (e) {}
+  try { PropertiesService.getScriptProperties().deleteProperty('ACTIVE_TOKEN'); } catch (e) {}
 }
 
 function getPublicSession_() {
