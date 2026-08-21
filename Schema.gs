@@ -47,16 +47,61 @@ function getSchemaBySheetName_(sheetName) {
   return key ? MASTER_SCHEMA[key] : null;
 }
 
-/** Remove obsolete Kelas metadata columns left by older versions. */
+/**
+ * Migrate MASTER_KELAS to the exact current structure and order.
+ * Old columns kode, nama and sheet_name are removed. The new Kelas field
+ * is placed immediately after ID, before spreadsheet_id.
+ */
 function migrateMasterKelasSchema_() {
   const sh=getMasterSpreadsheet_().getSheetByName(MASTER_SHEETS.KELAS);
-  if(!sh||sh.getLastColumn()<1)return;
+  const schema=MASTER_SCHEMA[MASTER_SHEETS.KELAS];
+  if(!sh||!schema||!schema.length)return;
+
+  const lastRow=Math.max(sh.getLastRow(),1);
+  const lastCol=Math.max(sh.getLastColumn(),1);
+  const raw=sh.getRange(1,1,lastRow,lastCol).getValues();
+  const headers=(raw[0]||[]).map(parseColumnId_);
+  const indexById={};
+  headers.forEach((id,i)=>{if(id&&!Object.prototype.hasOwnProperty.call(indexById,id))indexById[id]=i;});
+
+  const desiredIds=schema.map(x=>x[0]);
   const obsolete=new Set(['kode','nama','sheet_name']);
-  const headers=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0].map(parseColumnId_);
-  for(let i=headers.length-1;i>=0;i--){
-    if(obsolete.has(headers[i]))sh.deleteColumn(i+1);
+
+  // Preserve all valid current data, including legacy data that maps to kelas.
+  const output=[schema.map(x=>x[0]+'::'+x[1])];
+  for(let r=1;r<raw.length;r++){
+    const source=raw[r]||[];
+    const row=desiredIds.map(id=>{
+      const idx=indexById[id];
+      if(idx==null)return '';
+      return source[idx];
+    });
+    if(row.some(v=>String(v??'').trim()!==''))output.push(row);
   }
-  ensureColumns_(sh,MASTER_SCHEMA[MASTER_SHEETS.KELAS]);
+
+  // If an older version used nama as the class name, migrate it into kelas.
+  const namaIndex=indexById.nama;
+  const kelasIndex=desiredIds.indexOf('kelas');
+  if(namaIndex!=null&&kelasIndex>=0){
+    for(let r=1;r<output.length;r++){
+      if(!String(output[r][kelasIndex]??'').trim()){
+        const source=raw[r]||[];
+        output[r][kelasIndex]=source[namaIndex]??'';
+      }
+    }
+  }
+
+  // Rewrite the sheet in the exact desired order.
+  if(sh.getMaxColumns()<schema.length){
+    sh.insertColumnsAfter(sh.getMaxColumns(),schema.length-sh.getMaxColumns());
+  }
+  sh.clearContents();
+  sh.getRange(1,1,output.length,schema.length).setValues(output);
+  if(sh.getMaxColumns()>schema.length){
+    sh.deleteColumns(schema.length+1,sh.getMaxColumns()-schema.length);
+  }
+  sh.setFrozenRows(1);
+  schema.forEach(([id,label],i)=>sh.getRange(1,i+1).setNote('column_id='+id));
 }
 
 /** Deprecated: class activity sheets are no longer stored in MASTER. */
