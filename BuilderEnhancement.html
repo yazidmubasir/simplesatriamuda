@@ -7,7 +7,7 @@
     try{
       const x=await gas('getClassSpreadsheetSheets',state.builder.kelasId);
       const sheets=Array.isArray(x?.sheets)?x.sheets:[];
-      box.innerHTML='<div class="builder-help mb-3"><div class="d-flex flex-wrap justify-content-between align-items-start gap-2"><div><b>2. Kelola sheet kegiatan</b><br><small>Sheet yang sudah ada ditampilkan di bawah. Sebelum membuat kolom, OWNER dapat membuat sheet baru dan menentukan namanya melalui frontend.</small></div><button class="btn btn-success btn-sm" onclick="openCreateActivitySheet()"><i class="bi bi-plus-lg me-1"></i>Tambah Sheet</button></div></div>'+
+      box.innerHTML='<div class="builder-help mb-3"><div class="d-flex flex-wrap justify-content-between align-items-start gap-2"><div><b>2. Kelola sheet kegiatan</b><br><small>Sheet kegiatan berada di dalam Spreadsheet Kelas. Sebelum membuat kolom, OWNER dapat membuat sheet baru dan menentukan namanya melalui frontend.</small></div><button class="btn btn-success btn-sm" onclick="openCreateActivitySheet()"><i class="bi bi-plus-lg me-1"></i>Tambah Sheet</button></div></div>'+
         '<div class="row g-2">'+(sheets.length?sheets.map(s=>'<div class="col-md-6 col-xl-4"><button class="btn btn-outline-success w-100 text-start p-3" onclick="openActivitySheet(\''+esc(s.name).replace(/'/g,"\\'")+'\')"><b>'+esc(s.name)+'</b><small class="d-block text-muted">'+Number(s.rows||0)+' baris · '+Number(s.columns||0)+' kolom</small></button></div>').join(''):'<div class="col-12"><div class="text-center text-muted border rounded-3 p-4">Belum ada sheet kegiatan.</div></div>')+'</div><div id="builderEditor" class="mt-4"></div>';
     }catch(e){box.innerHTML='<div class="alert alert-danger">'+esc(errorText(e))+'</div>'}
   };
@@ -37,6 +37,26 @@
       await renderActivitySheets();
       await openActivitySheet(name);
     }catch(e){err.textContent=errorText(e)}finally{btn.disabled=false;btn.innerHTML='Buat Sheet';}
+  };
+
+  /* MASTER KELAS: spreadsheet is the class database; activity sheet names live inside it. */
+  if(window.masterMeta?.KELAS){
+    masterMeta.KELAS.cols=['spreadsheet_id','admin_user_id','status'];
+  }
+  const _saveMaster=window.saveMaster;
+  window.saveMaster=async function(){
+    if(state.entity!=='KELAS')return _saveMaster();
+    const modal=document.getElementById('dataModal'),btn=document.getElementById('dataSaveBtn'),d={};
+    modal.querySelectorAll('[data-f]').forEach(x=>{d[x.dataset.f]=x.value});
+    if(!String(d.spreadsheet_id||'').trim())return alert('ID Spreadsheet Kelas wajib diisi.');
+    btn.disabled=true;
+    try{
+      const r=await gas('saveKelasConfig',d);
+      if(!r?.ok)throw new Error(r?.message||'Gagal menyimpan konfigurasi kelas.');
+      bootstrap.Modal.getInstance(modal)?.hide();
+      state.kelasOptions=null;
+      await loadMaster();
+    }catch(e){alert('Gagal menyimpan: '+errorText(e))}finally{btn.disabled=false}
   };
 })();
 </script>
