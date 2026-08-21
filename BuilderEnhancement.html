@@ -90,8 +90,36 @@
 
   const _saveMaster=window.saveMaster;
   window.saveMaster=async function(){
+    const modal=document.getElementById('dataModal');
+    const btn=document.getElementById('dataSaveBtn');
+
+    /* USERS: explicitly collect the dynamic ADMIN_KELAS select. */
+    if(state.entity==='USERS'){
+      const d={};
+      modal?.querySelectorAll('[data-f]')?.forEach(x=>{d[x.dataset.f]=x.value});
+      const role=String(d.role||'').trim().toUpperCase();
+      if(role==='ADMIN_KELAS'){
+        const select=document.getElementById('adminKelasSelect');
+        const selectedClassId=String(select?.value||'').trim();
+        d.kelas_id=selectedClassId;
+        if(!selectedClassId){alert('Kelas wajib dipilih untuk ADMIN_KELAS.');return;}
+      }
+      if(!String(d.username||'').trim())return alert('Username wajib diisi.');
+      if(!String(d.nama||'').trim())return alert('Nama wajib diisi.');
+      btn.disabled=true;
+      try{
+        const r=await gas('saveMasterRow','USERS',d);
+        if(!r?.ok)throw new Error(r?.message||'Gagal menyimpan pengguna.');
+        bootstrap.Modal.getInstance(modal)?.hide();
+        state.userRelations=null;
+        await loadMaster();
+      }catch(e){alert('Gagal menyimpan: '+errorText(e))}
+      finally{btn.disabled=false}
+      return;
+    }
+
     if(state.entity!=='KELAS')return _saveMaster();
-    const modal=document.getElementById('dataModal'),btn=document.getElementById('dataSaveBtn'),d={};
+    const d={};
     modal.querySelectorAll('[data-f]').forEach(x=>{d[x.dataset.f]=x.value});
     if(!String(d.kelas||'').trim())return alert('Kelas wajib diisi.');
     if(!String(d.spreadsheet_id||'').trim())return alert('ID Spreadsheet Kelas wajib diisi.');
