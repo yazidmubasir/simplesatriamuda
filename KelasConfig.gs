@@ -10,7 +10,6 @@ function saveKelasConfig(data){
   const id=String(data.id||'').trim();
   const kelas=String(data.kelas||'').trim();
   const spreadsheetId=String(data.spreadsheet_id||'').trim();
-  const adminUserId=String(data.admin_user_id||'').trim();
   const status=String(data.status||'AKTIF').trim().toUpperCase();
   if(!kelas)throw new Error('KELAS_REQUIRED');
   if(kelas.length>100)throw new Error('KELAS_TOO_LONG');
@@ -34,11 +33,10 @@ function saveKelasConfig(data){
     updateById_(MASTER_SHEETS.KELAS,id,{
       kelas:kelas,
       spreadsheet_id:spreadsheetId,
-      admin_user_id:adminUserId,
       status:status,
       updated_at:new Date()
     });
-    audit_(user,'CONFIGURE',MASTER_SHEETS.KELAS,id,{kelas:kelas,spreadsheet_id:spreadsheetId,spreadsheet_name:ss.getName(),admin_user_id:adminUserId,status:status});
+    audit_(user,'CONFIGURE',MASTER_SHEETS.KELAS,id,{kelas:kelas,spreadsheet_id:spreadsheetId,spreadsheet_name:ss.getName(),status:status});
     return {ok:true,row:sanitizeClientRow_(MASTER_SHEETS.KELAS,findMasterById_(MASTER_SHEETS.KELAS,id)),spreadsheet_name:ss.getName()};
   }
 
@@ -47,12 +45,11 @@ function saveKelasConfig(data){
     id:Utilities.getUuid(),
     kelas:kelas,
     spreadsheet_id:spreadsheetId,
-    admin_user_id:adminUserId,
     status:status,
     created_at:now,
     updated_at:now
   };
   appendObject_(sh,row);
-  audit_(user,'CREATE',MASTER_SHEETS.KELAS,row.id,{kelas:kelas,spreadsheet_id:spreadsheetId,spreadsheet_name:ss.getName(),admin_user_id:adminUserId,status:status});
+  audit_(user,'CREATE',MASTER_SHEETS.KELAS,row.id,{kelas:kelas,spreadsheet_id:spreadsheetId,spreadsheet_name:ss.getName(),status:status});
   return {ok:true,row:sanitizeClientRow_(MASTER_SHEETS.KELAS,row),spreadsheet_name:ss.getName()};
 }
