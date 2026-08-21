@@ -41,59 +41,33 @@
     }catch(e){err.textContent=errorText(e)}finally{btn.disabled=false;btn.innerHTML='Buat Sheet';}
   };
 
-  /* MASTER_KELAS: kelas identifies which class owns the spreadsheet. */
   masterMeta.KELAS.cols=['kelas','spreadsheet_id','status'];
 
-  /* MASTER_USERS owns ADMIN_KELAS usernames. No admin_user_id is stored in MASTER_KELAS. */
-
-  /* ADMIN_KELAS -> Pilih Kelas must always come from MASTER_KELAS.kelas. */
   async function syncAdminKelasDropdown_(){
     const role=String(document.getElementById('userRole')?.value||'').toUpperCase();
     const box=document.getElementById('userRelationFields');
     if(!box)return;
     if(role!=='ADMIN_KELAS')return;
-
     const current=String(document.querySelector('#dataModalBody [data-f="kelas_id"]')?.value||'').trim();
     box.innerHTML='<div class="user-relation-note"><span class="spinner-border spinner-border-sm me-2"></span>Memuat daftar kelas dari MASTER_KELAS...</div>';
     try{
       const rows=await gas('getMasterRows','KELAS');
       const classes=(Array.isArray(rows)?rows:[]).filter(r=>String(r?.status||'AKTIF').toUpperCase()!=='NONAKTIF'&&String(r?.kelas||'').trim());
-      box.innerHTML='<label class="form-label fw-semibold">Pilih Kelas</label>'+
-        '<select class="form-select" data-f="kelas_id" id="adminKelasSelect">'+
-        '<option value="">-- Pilih --</option>'+classes.map(r=>'<option value="'+esc(r.id)+'">'+esc(r.kelas)+'</option>').join('')+
-        '</select>'+
-        '<small class="text-muted">Daftar kelas diambil dari kolom <code>kelas</code> pada <code>MASTER_KELAS</code>.</small>';
-      const select=document.getElementById('adminKelasSelect');
-      if(select&&current)select.value=current;
-      if(select)select.disabled=classes.length===0;
+      box.innerHTML='<label class="form-label fw-semibold">Pilih Kelas</label><select class="form-select" data-f="kelas_id" id="adminKelasSelect"><option value="">-- Pilih --</option>'+classes.map(r=>'<option value="'+esc(r.id)+'">'+esc(r.kelas)+'</option>').join('')+'</select><small class="text-muted">Daftar kelas diambil dari kolom <code>kelas</code> pada <code>MASTER_KELAS</code>.</small>';
+      const select=document.getElementById('adminKelasSelect');if(select&&current)select.value=current;if(select)select.disabled=classes.length===0;
       if(!classes.length)box.innerHTML='<div class="alert alert-warning mb-0">Belum ada kelas aktif di MASTER_KELAS.</div>';
     }catch(e){box.innerHTML='<div class="alert alert-danger mb-0">Gagal memuat kelas: '+esc(errorText(e))+'</div>';}
   }
 
   const _openUserModalForClass=window.openUserModal;
-  if(typeof _openUserModalForClass==='function'){
-    window.openUserModal=async function(){
-      const result=await _openUserModalForClass.apply(this,arguments);
-      setTimeout(()=>syncAdminKelasDropdown_(),0);
-      return result;
-    };
-  }
-
+  if(typeof _openUserModalForClass==='function')window.openUserModal=async function(){const result=await _openUserModalForClass.apply(this,arguments);setTimeout(()=>syncAdminKelasDropdown_(),0);return result;};
   const _refreshUserRoleFieldsForClass=window.refreshUserRoleFields;
-  if(typeof _refreshUserRoleFieldsForClass==='function'){
-    window.refreshUserRoleFields=async function(){
-      const result=await _refreshUserRoleFieldsForClass.apply(this,arguments);
-      setTimeout(()=>syncAdminKelasDropdown_(),0);
-      return result;
-    };
-  }
+  if(typeof _refreshUserRoleFieldsForClass==='function')window.refreshUserRoleFields=async function(){const result=await _refreshUserRoleFieldsForClass.apply(this,arguments);setTimeout(()=>syncAdminKelasDropdown_(),0);return result;};
 
   const _saveMaster=window.saveMaster;
   window.saveMaster=async function(){
     const modal=document.getElementById('dataModal');
     const btn=document.getElementById('dataSaveBtn');
-
-    /* USERS: explicitly collect the dynamic ADMIN_KELAS select. */
     if(state.entity==='USERS'){
       const d={};
       modal?.querySelectorAll('[data-f]')?.forEach(x=>{d[x.dataset.f]=x.value});
@@ -110,27 +84,39 @@
       try{
         const r=await gas('saveMasterRow','USERS',d);
         if(!r?.ok)throw new Error(r?.message||'Gagal menyimpan pengguna.');
-        bootstrap.Modal.getInstance(modal)?.hide();
-        state.userRelations=null;
-        await loadMaster();
-      }catch(e){alert('Gagal menyimpan: '+errorText(e))}
-      finally{btn.disabled=false}
+        bootstrap.Modal.getInstance(modal)?.hide();state.userRelations=null;await loadMaster();
+      }catch(e){alert('Gagal menyimpan: '+errorText(e))}finally{btn.disabled=false}
       return;
     }
-
     if(state.entity!=='KELAS')return _saveMaster();
-    const d={};
-    modal.querySelectorAll('[data-f]').forEach(x=>{d[x.dataset.f]=x.value});
-    if(!String(d.kelas||'').trim())return alert('Kelas wajib diisi.');
-    if(!String(d.spreadsheet_id||'').trim())return alert('ID Spreadsheet Kelas wajib diisi.');
-    btn.disabled=true;
-    try{
-      const r=await gas('saveKelasConfig',d);
-      if(!r?.ok)throw new Error(r?.message||'Gagal menyimpan konfigurasi kelas.');
-      bootstrap.Modal.getInstance(modal)?.hide();
-      state.kelasOptions=null;
-      await loadMaster();
-    }catch(e){alert('Gagal menyimpan: '+errorText(e))}finally{btn.disabled=false}
+    const d={};modal.querySelectorAll('[data-f]').forEach(x=>{d[x.dataset.f]=x.value});
+    if(!String(d.kelas||'').trim())return alert('Kelas wajib diisi.');if(!String(d.spreadsheet_id||'').trim())return alert('ID Spreadsheet Kelas wajib diisi.');btn.disabled=true;
+    try{const r=await gas('saveKelasConfig',d);if(!r?.ok)throw new Error(r?.message||'Gagal menyimpan konfigurasi kelas.');bootstrap.Modal.getInstance(modal)?.hide();state.kelasOptions=null;await loadMaster()}catch(e){alert('Gagal menyimpan: '+errorText(e))}finally{btn.disabled=false}
   };
+
+  /* AUTH BRIDGE: preserve the login token in the browser session and refresh
+     the server-side active token before protected calls. This is required because
+     the Web App executes server code as OWNER, so UserProperties is not a safe
+     per-browser session boundary. */
+  const baseGas=window.gas;
+  if(typeof baseGas==='function'){
+    window.gas=async function(fn,...args){
+      const token=state.token||sessionStorage.getItem('SIM_SATRIA_TOKEN')||'';
+      if(token&&fn!=='login'&&fn!=='setActiveToken'){
+        try{await baseGas('setActiveToken',token)}catch(e){}
+      }
+      const result=await baseGas(fn,...args);
+      if(fn==='login'&&result?.ok&&result.token){
+        state.token=result.token;
+        try{sessionStorage.setItem('SIM_SATRIA_TOKEN',result.token)}catch(e){}
+        try{await baseGas('setActiveToken',result.token)}catch(e){}
+      }
+      return result;
+    };
+  }
+  const _doLogout=window.doLogout;
+  window.doLogout=async function(){try{const token=state.token||sessionStorage.getItem('SIM_SATRIA_TOKEN')||'';if(token)await baseGas('logout',token)}catch(e){}try{sessionStorage.removeItem('SIM_SATRIA_TOKEN')}catch(e){}location.reload()};
+  const _renderClassAdmin=window.renderClassAdmin;
+  if(typeof _renderClassAdmin==='function')window.renderClassAdmin=async function(){const token=state.token||sessionStorage.getItem('SIM_SATRIA_TOKEN')||'';if(token)try{await baseGas('setActiveToken',token)}catch(e){}return _renderClassAdmin.apply(this,arguments)};
 })();
 </script>
