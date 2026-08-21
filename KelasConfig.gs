@@ -32,23 +32,13 @@ function saveKelasConfig(data){
       status:status,
       updated_at:new Date()
     });
-    audit_(user,'CONFIGURE',MASTER_SHEETS.KELAS,id,{
-      spreadsheet_id:spreadsheetId,
-      spreadsheet_name:ss.getName(),
-      admin_user_id:adminUserId,
-      status:status
-    });
+    audit_(user,'CONFIGURE',MASTER_SHEETS.KELAS,id,{spreadsheet_id:spreadsheetId,spreadsheet_name:ss.getName(),admin_user_id:adminUserId,status:status});
     return {ok:true,row:sanitizeClientRow_(MASTER_SHEETS.KELAS,findMasterById_(MASTER_SHEETS.KELAS,id)),spreadsheet_name:ss.getName()};
   }
 
   const now=new Date();
-  const spreadsheetName=String(ss.getName()||'Kelas').trim();
-  const generatedCode=makeClassCodeFromSpreadsheetName_(spreadsheetName,rows);
   const row={
     id:Utilities.getUuid(),
-    kode:generatedCode,
-    nama:spreadsheetName,
-    sheet_name:'',
     spreadsheet_id:spreadsheetId,
     admin_user_id:adminUserId,
     status:status,
@@ -56,19 +46,6 @@ function saveKelasConfig(data){
     updated_at:now
   };
   appendObject_(sh,row);
-  audit_(user,'CREATE',MASTER_SHEETS.KELAS,row.id,{
-    spreadsheet_id:spreadsheetId,
-    spreadsheet_name:spreadsheetName,
-    admin_user_id:adminUserId,
-    status:status
-  });
-  return {ok:true,row:sanitizeClientRow_(MASTER_SHEETS.KELAS,row),spreadsheet_name:spreadsheetName};
-}
-
-function makeClassCodeFromSpreadsheetName_(name,rows){
-  const base=String(name||'KELAS').toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').substring(0,20)||'KELAS';
-  let code=base,n=2;
-  const used=new Set((rows||[]).map(r=>String(r.kode||'').toUpperCase()));
-  while(used.has(code))code=base+'_'+n++;
-  return code;
+  audit_(user,'CREATE',MASTER_SHEETS.KELAS,row.id,{spreadsheet_id:spreadsheetId,spreadsheet_name:ss.getName(),admin_user_id:adminUserId,status:status});
+  return {ok:true,row:sanitizeClientRow_(MASTER_SHEETS.KELAS,row),spreadsheet_name:ss.getName()};
 }
