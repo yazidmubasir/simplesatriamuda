@@ -4,6 +4,16 @@ function hashPassword_(password) {
   return bytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
 }
 
+function activeSessionKey_() {
+  return 'ACTIVE_SESSION_' + Session.getTemporaryActiveUserKey();
+}
+
+function bindActiveToken_(token) {
+  const t = String(token || '').trim();
+  if (!t) return;
+  CacheService.getScriptCache().put(activeSessionKey_(), t, 21600);
+}
+
 function login(username, password) {
   username = String(username || '').trim().toLowerCase();
   if (!username || password == null) return { ok: false, message: 'Username dan password wajib diisi.' };
@@ -12,26 +22,42 @@ function login(username, password) {
   if (!user || user.password_hash !== hashPassword_(password)) return { ok: false, message: 'Username atau password salah.' };
   const token = Utilities.getUuid();
   CacheService.getScriptCache().put('SESSION_' + token, JSON.stringify(user), 21600);
+  bindActiveToken_(token);
   updateById_(MASTER_SHEETS.USERS, user.id, { last_login: new Date() });
   return { ok: true, token: token, user: publicUser_(user), menus: getVisibleMenusForUser_(user) };
 }
 
 function logout(token) {
-  if (token) CacheService.getScriptCache().remove('SESSION_' + token);
+  const t = String(token || '').trim();
+  if (t) CacheService.getScriptCache().remove('SESSION_' + t);
   clearActiveToken_();
   return { ok: true };
 }
 
 function getSession_(token) {
-  const t = token || PropertiesService.getUserProperties().getProperty('ACTIVE_TOKEN');
+  let t = String(token || '').trim();
+  if (!t) t = CacheService.getScriptCache().get(activeSessionKey_()) || '';
+  if (!t) t = PropertiesService.getUserProperties().getProperty('ACTIVE_TOKEN') || '';
   if (!t) return null;
   const raw = CacheService.getScriptCache().get('SESSION_' + t);
   if (!raw) return null;
   try { return JSON.parse(raw); } catch (e) { return null; }
 }
 
-function setActiveToken(token) { PropertiesService.getUserProperties().setProperty('ACTIVE_TOKEN', String(token || '')); return getPublicSession_(); }
-function clearActiveToken_() { PropertiesService.getUserProperties().deleteProperty('ACTIVE_TOKEN'); }
+function setActiveToken(token) {
+  const t = String(token || '').trim();
+  if (!t) { clearActiveToken_(); return null; }
+  bindActiveToken_(t);
+  // Keep the old property only as a compatibility fallback.
+  PropertiesService.getUserProperties().setProperty('ACTIVE_TOKEN', t);
+  return getPublicSession_();
+}
+
+function clearActiveToken_() {
+  CacheService.getScriptCache().remove(activeSessionKey_());
+  PropertiesService.getUserProperties().deleteProperty('ACTIVE_TOKEN');
+}
+
 function getPublicSession_() { const u = getSession_(); return u ? publicUser_(u) : null; }
 function publicUser_(u) { return { id:u.id, username:u.username, nama:u.nama, role:u.role, kelas_id:u.kelas_id || '', guru_id:u.guru_id || '', karyawan_id:u.karyawan_id || '', siswa_id:u.siswa_id || '' }; }
 
