@@ -9,8 +9,9 @@ const APP = Object.freeze({
 });
 
 function doGet() {
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
+  const index = HtmlService.createTemplateFromFile('Index').evaluate().getContent();
+  const enhancement = HtmlService.createHtmlOutputFromFile('BuilderEnhancement').getContent();
+  return HtmlService.createHtmlOutput(index.replace('</body>', enhancement + '</body>'))
     .setTitle(APP.name)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -34,10 +35,7 @@ function bootstrapSystem() {
   }
 }
 
-/**
- * Compatibility wrapper used by bootstrapSystem().
- * The actual implementation lives in Config.gs.
- */
+/** Compatibility wrapper used by bootstrapSystem(). */
 function ensureMasterSpreadsheet_() {
   return getOrCreateMasterSpreadsheet_();
 }
